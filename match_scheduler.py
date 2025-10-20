@@ -3,7 +3,7 @@ import pandas as pd
 import itertools
 import os
 
-st.set_page_config(page_title="Weekly Match Scheduler", layout="wide")
+st.set_page_config(page_title="Weekly Doubles Match Scheduler", layout="wide")
 
 DATA_FILE = "players.csv"
 
@@ -21,20 +21,39 @@ def save_players(df):
     df.to_csv(DATA_FILE, index=False)
 
 
-def round_robin(players, double=False):
-    """Generate round robin fixtures for given players."""
+def doubles_round_robin(players):
+    """Generate doubles matches for 4 or 5 players."""
     matches = []
-    if double:
-        all_pairs = list(itertools.permutations(players, 2))
-        matches = [{"Match": f"{p1} vs {p2}"} for (p1, p2) in all_pairs]
+
+    n = len(players)
+    if n == 4:
+        # Fixed 3 matches to rotate partners
+        a, b, c, d = players
+        matches = [
+            {"Match": f"{a}+{b} vs {c}+{d}"},
+            {"Match": f"{a}+{c} vs {b}+{d}"},
+            {"Match": f"{a}+{d} vs {b}+{c}"}
+        ]
+    elif n == 5:
+        # Rotate 5th player sitting out
+        a, b, c, d, e = players
+        matches = [
+            {"Match": f"{a}+{b} vs {c}+{d} (E sits out)"},
+            {"Match": f"{a}+{c} vs {b}+{e} (D sits out)"},
+            {"Match": f"{a}+{d} vs {c}+{e} (B sits out)"},
+            {"Match": f"{b}+{d} vs {c}+{e} (A sits out)"},
+            {"Match": f"{a}+{e} vs {b}+{c} (D sits out)"},
+        ]
     else:
-        all_pairs = list(itertools.combinations(players, 2))
-        matches = [{"Match": f"{p1} vs {p2}"} for (p1, p2) in all_pairs]
+        # For 6+ players, just pick first 4-5 players and generate matches
+        subset = players[:5] if n >=5 else players[:4]
+        return doubles_round_robin(subset)
+
     return matches
 
 
 def group_players(selected_players):
-    """Group players into courts of 4 or 5 by their numeric value."""
+    """Group players into courts of 4 or 5 by numeric value."""
     selected_players = selected_players.sort_values(by="Value", ascending=False).reset_index(drop=True)
     num_players = len(selected_players)
     groups = []
@@ -54,7 +73,7 @@ def group_players(selected_players):
 
 # ---------- Main App ----------
 
-st.title("🎾 Weekly Match Scheduler")
+st.title("🎾 Weekly Doubles Match Scheduler")
 
 players_df = load_players()
 
@@ -72,7 +91,7 @@ with st.sidebar.form("add_player"):
         save_players(players_df)
         st.sidebar.success(f"Added {name}")
 
-# Edit player selection
+# Select players for this week
 st.subheader("Select Players for This Week")
 
 for i, row in players_df.iterrows():
@@ -89,19 +108,17 @@ st.write(f"✅ {len(selected)} players selected")
 if len(selected) >= 4:
     groups = group_players(selected)
 
-    st.subheader("Court Assignments & Round Robin Matches")
+    st.subheader("Court Assignments & Doubles Matches")
 
     for idx, group in enumerate(groups, start=1):
         st.markdown(f"### 🏟️ Court {idx}")
         st.dataframe(group[["Name", "Value"]].reset_index(drop=True))
 
-        if len(group) == 5:
-            rr = round_robin(group["Name"].tolist(), double=False)
-        else:
-            rr = round_robin(group["Name"].tolist(), double=True)
-
-        rr_df = pd.DataFrame(rr)
-        st.table(rr_df)
+        # Generate doubles matches
+        player_names = group["Name"].tolist()
+        doubles_matches = doubles_round_robin(player_names)
+        matches_df = pd.DataFrame(doubles_matches)
+        st.table(matches_df)
 
 else:
-    st.warning("Please select at least 4 players to create matches.")
+    st.warning("Please select at least 4 players to create doubles matches.")
